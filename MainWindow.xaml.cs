@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Configuration;
 using System.Data;
 using System.Linq;
 using System.Text;
@@ -26,6 +27,8 @@ namespace currency_converter_wpf_dotnet
         {
             InitializeComponent();
             BindCurrency();
+
+            string connectionString = ConfigurationManager.ConnectionStrings["currency_converter_wpf_dotnet.Properties.Settings.CurrencyConverterDbConnectionString"].ConnectionString;
         }
 
         private void BindCurrency()
