@@ -27,17 +27,17 @@ namespace currency_converter_wpf_dotnet
 
         private void NumberValidationTextBox(object sender, TextCompositionEventArgs e)
         {
-            // Implement your validation logic here
+            MessageBox.Show("Only numbers are allowed");
         }
 
         private void Clear_Click(object sender, RoutedEventArgs e)
         {
-            // Clear all the textboxes
+            lblCurrency.Content = "";
         }
 
         private void Convert_Click(object sender, RoutedEventArgs e)
         {
-            // Implement the conversion logic here
+            lblCurrency.Content = "Currency was converted";
         }
     }
 }
