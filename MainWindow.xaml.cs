@@ -28,18 +28,18 @@ namespace currency_converter_wpf_dotnet
         private int CurrencyId = 0;
 
         //Create object for SqlConnection
-        SqlConnection con = new SqlConnection();
+        SqlConnection dbConnection = new SqlConnection();
 
         //Create an object for SqlCommand
-        SqlCommand cmd = new SqlCommand();
+        SqlCommand sqlCommand = new SqlCommand();
 
         //Create object for SqlDataAdapter
-        SqlDataAdapter da = new SqlDataAdapter();
+        SqlDataAdapter dataAdapter = new SqlDataAdapter();
         public MainWindow()
         {
             InitializeComponent();
             string connectionString = ConfigurationManager.ConnectionStrings["currency_converter_wpf_dotnet.Properties.Settings.CurrencyConverterDbConnectionString"].ConnectionString;
-            con = new SqlConnection(connectionString);
+            dbConnection = new SqlConnection(connectionString);
             BindCurrency();
         }
 
@@ -48,9 +48,9 @@ namespace currency_converter_wpf_dotnet
             try
             {
                 // Open the connection
-                con.Open();
+                dbConnection.Open();
                 string query = "INSERT INTO Conversion (CurrencyFrom, CurrencyTo, OriginalAmount, ConvertedAmount, ConversionDate) VALUES (@CurrencyFrom, @CurrencyTo, @Amount, @ConvertedAmount,  @ConversionDate)";
-                SqlCommand command = new SqlCommand(query, con);
+                SqlCommand command = new SqlCommand(query, dbConnection);
 
                 // Add the parameters
                 if (Decimal.TryParse(txtCurrency.Text, out decimal amount))
@@ -68,7 +68,7 @@ namespace currency_converter_wpf_dotnet
                 command.Parameters.AddWithValue("@ConversionDate", DateTime.Now);
 
                 command.ExecuteNonQuery();
-                con.Close();
+                dbConnection.Close();
                 MessageBox.Show("Conversion Added Successfully");
             }
             catch (Exception ex)
@@ -82,9 +82,10 @@ namespace currency_converter_wpf_dotnet
             try
             {
                 // Open the connection
-                con.Open();
-                string query = "SELECT * FROM Currency";
-                SqlDataAdapter adapter = new SqlDataAdapter(query, con);
+                MyConnection();
+                sqlCommand = new SqlCommand("SELECT * FROM Currency", dbConnection);
+                sqlCommand.CommandType = CommandType.Text;
+                dataAdapter = new SqlDataAdapter(sqlCommand);
 
                 // Bind the currency to the label
                 DataTable dtcurrency = new DataTable();
@@ -93,8 +94,8 @@ namespace currency_converter_wpf_dotnet
 
                 dtcurrency.Rows.Add("Select Currency", "0");
 
-                adapter.Fill(dtcurrency);
-                con.Close();
+                dataAdapter.Fill(dtcurrency);
+                dbConnection.Close();
 
                 cmbFromCurrency.ItemsSource = dtcurrency.DefaultView;
                 cmbFromCurrency.DisplayMemberPath = "CurrencyCode";
@@ -220,17 +221,17 @@ namespace currency_converter_wpf_dotnet
                         //Show the confirmation message
                         if (MessageBox.Show("Are you sure you want to update ?", "Information", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
                         {
-                            Mycon();
+                            MyConnection();
                             DataTable dt = new DataTable();
 
                             //Update Query Record update using Id
-                            cmd = new SqlCommand("UPDATE Currency_Master SET Amount = @Amount, CurrencyName = @CurrencyName WHERE Id = @Id", con);
-                            cmd.CommandType = CommandType.Text;
-                            cmd.Parameters.AddWithValue("@Id", CurrencyId);
-                            cmd.Parameters.AddWithValue("@Amount", txtAmount.Text);
-                            cmd.Parameters.AddWithValue("@CurrencyName", txtCurrencyName.Text);
-                            cmd.ExecuteNonQuery();
-                            con.Close();
+                            sqlCommand = new SqlCommand("UPDATE Currency_Master SET Amount = @Amount, CurrencyName = @CurrencyName WHERE Id = @Id", dbConnection);
+                            sqlCommand.CommandType = CommandType.Text;
+                            sqlCommand.Parameters.AddWithValue("@Id", CurrencyId);
+                            sqlCommand.Parameters.AddWithValue("@Amount", txtAmount.Text);
+                            sqlCommand.Parameters.AddWithValue("@CurrencyName", txtCurrencyName.Text);
+                            sqlCommand.ExecuteNonQuery();
+                            dbConnection.Close();
 
                             MessageBox.Show("Data updated successfully", "Information", MessageBoxButton.OK, MessageBoxImage.Information);
                         }
@@ -240,14 +241,17 @@ namespace currency_converter_wpf_dotnet
                     {
                         if (MessageBox.Show("Are you sure you want to save ?", "Information", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
                         {
-                            Mycon();
+                            MyConnection();
                             //Insert query to Save data in the table
-                            cmd = new SqlCommand("INSERT INTO Currency_Master(Amount, CurrencyName) VALUES(@Amount, @CurrencyName)", con);
-                            cmd.CommandType = CommandType.Text;
-                            cmd.Parameters.AddWithValue("@Amount", txtAmount.Text);
-                            cmd.Parameters.AddWithValue("@CurrencyName", txtCurrencyName.Text);
-                            cmd.ExecuteNonQuery();
-                            con.Close();
+                            sqlCommand = new SqlCommand("INSERT INTO Currency(CurrencyName, CurrencyCode, IsReference, ExchangeRate, LastRateUpdate) VALUES(@CurrencyName, @CurrencyCode, @IsReference, @ExchangeRate, @LastRateUpdate)", dbConnection);
+                            sqlCommand.CommandType = CommandType.Text;
+                            sqlCommand.Parameters.AddWithValue("@CurrencyName", txtCurrencyName.Text);
+                            sqlCommand.Parameters.AddWithValue("@CurrencyCode", txtCurrencyName.Text.Substring(0, 3).ToUpper());
+                            sqlCommand.Parameters.AddWithValue("@IsReference", 0);
+                            sqlCommand.Parameters.AddWithValue("@ExchangeRate", 0);
+                            sqlCommand.Parameters.AddWithValue("@LastRateUpdate", DateTime.Now);
+                            sqlCommand.ExecuteNonQuery();
+                            dbConnection.Close();
 
                             MessageBox.Show("Data saved successfully", "Information", MessageBoxButton.OK, MessageBoxImage.Information);
                         }
@@ -285,24 +289,24 @@ namespace currency_converter_wpf_dotnet
         {
 
             //Method is used for connect with database and open database connection
-            Mycon();
+            MyConnection();
 
             //Create Datatable object
             DataTable dt = new DataTable();
 
             //Write SQL query to get the data from database table. Query written in double quotes and after comma provide connection.
-            cmd = new SqlCommand("SELECT * FROM Currency_Master", con)
+            sqlCommand = new SqlCommand("SELECT * FROM Currency", dbConnection)
             {
                 //CommandType define which type of command will execute like Text, StoredProcedure, TableDirect.
                 CommandType = CommandType.Text
             };
 
             //It is accept a parameter that contains the command text of the object's SelectCommand property.
-            da = new SqlDataAdapter(cmd);
+            dataAdapter = new SqlDataAdapter(sqlCommand);
 
             //The DataAdapter serves as a bridge between a DataSet and a data source for retrieving and saving data. 
             //The fill operation then adds the rows to destination DataTable objects in the DataSet
-            da.Fill(dt);
+            dataAdapter.Fill(dt);
 
             //dt is not null and rows count greater than 0
             if (dt != null && dt.Rows.Count > 0)
@@ -312,17 +316,17 @@ namespace currency_converter_wpf_dotnet
                 dgvCurrency.ItemsSource = null;
 
             //Database connection close
-            con.Close();
+            dbConnection.Close();
         }
 
-        public void Mycon()
+        public void MyConnection()
         {
             //Database connection string
-            String Conn = ConfigurationManager.ConnectionStrings["ConnectionString"].ConnectionString;
-            con = new SqlConnection(Conn);
+            String Conn = ConfigurationManager.ConnectionStrings["currency_converter_wpf_dotnet.Properties.Settings.CurrencyConverterDbConnectionString"].ConnectionString;
+            dbConnection = new SqlConnection(Conn);
 
             //Open the connection
-            con.Open();
+            dbConnection.Open();
         }
 
 
