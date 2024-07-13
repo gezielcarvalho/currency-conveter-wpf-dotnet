@@ -33,6 +33,40 @@ namespace currency_converter_wpf_dotnet
             BindCurrency();
         }
 
+        private void AddConversion(double convertedValue)
+        {
+            try
+            {
+                // Open the connection
+                sqlConection.Open();
+                string query = "INSERT INTO Conversion (CurrencyFrom, CurrencyTo, OriginalAmount, ConvertedAmount, ConversionDate) VALUES (@CurrencyFrom, @CurrencyTo, @Amount, @ConvertedAmount,  @ConversionDate)";
+                SqlCommand command = new SqlCommand(query, sqlConection);
+
+                // Add the parameters
+                if (Decimal.TryParse(txtCurrency.Text, out decimal amount))
+                {
+                    command.Parameters.AddWithValue("@Amount", amount);
+                }
+                else
+                {
+                    MessageBox.Show("Invalid amount entered");
+                    return;
+                }
+                command.Parameters.AddWithValue("@ConvertedAmount", convertedValue);
+                command.Parameters.AddWithValue("@CurrencyFrom", int.Parse(cmbFromCurrency.SelectedValue.ToString()));
+                command.Parameters.AddWithValue("@CurrencyTo", int.Parse(cmbToCurrency.SelectedValue.ToString()));
+                command.Parameters.AddWithValue("@ConversionDate", DateTime.Now);
+
+                command.ExecuteNonQuery();
+                sqlConection.Close();
+                MessageBox.Show("Conversion Added Successfully");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message);
+            }
+        }
+
         private void BindCurrency()
         {
             try
@@ -84,10 +118,14 @@ namespace currency_converter_wpf_dotnet
         {
             txtCurrency.Text = "";
             lblCurrency.Content = "";
-            cmbFromCurrency.SelectedIndex = 0;
-            cmbToCurrency.SelectedIndex = 0;
-            cmbFromCurrency.SelectedIndex = 0;
-            cmbToCurrency.SelectedIndex = 0;
+            if (cmbFromCurrency.Items.Count > 0)
+            {
+                cmbFromCurrency.SelectedIndex = 0;
+            }
+            if (cmbToCurrency.Items.Count > 0)
+            {
+                cmbToCurrency.SelectedIndex = 0;
+            }
             txtCurrency.Focus();
         }
         private void Convert_Click(object sender, RoutedEventArgs e)
@@ -144,6 +182,7 @@ namespace currency_converter_wpf_dotnet
 
                 //Show the label converted currency and converted currency name.
                 lblCurrency.Content = cmbToCurrency.Text + " " + ConvertedValue.ToString("N2");
+                AddConversion(ConvertedValue);
             }
         }
 
