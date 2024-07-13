@@ -186,7 +186,7 @@
                 </StackPanel>
             </Grid>
         </TabItem>
-        <TabItem Name="tbMaster" Header="Currency Master">
+        <TabItem Name="tbMaster" Header="Currency Master" Height="20" VerticalAlignment="Bottom">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="60"></RowDefinition>
@@ -216,12 +216,12 @@
                     <Label Height="50" Width="1000" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Content="Currency Master" FontSize="25" Foreground="#002075" FontWeight="Bold"></Label>
                 </StackPanel>
                 <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Top" Height="40" Width="800" Margin="100,0">
-                    <Label Height="40" Width="180" Content="Enter Amount : " Margin="180 0 0 0" VerticalAlignment="Bottom" Foreground="White" FontSize="20"></Label>
-                    <Label Height="40" Width="180" Content="Currency Name : " Margin="60 0 0 0" VerticalAlignment="Bottom" Foreground="White" FontSize="20"></Label>
+                    <Label Height="40" Width="180" Content="Currency Name: " Margin="180 0 0 0" VerticalAlignment="Bottom" Foreground="White" FontSize="20"></Label>
+                    <Label Height="40" Width="180" Content="Exchange Rate: " Margin="60 0 0 0" VerticalAlignment="Bottom" Foreground="White" FontSize="20"></Label>
                 </StackPanel>
                 <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Height="60" Width="800" VerticalAlignment="Bottom" Margin="100,0">
-                    <TextBox Name="txtAmount" Width="200" Height="30" Margin="180 0 0 0" PreviewTextInput="NumberValidationTextBox" FontSize="18" VerticalContentAlignment="Center" VerticalAlignment="Top"></TextBox>
-                    <TextBox Name="txtCurrencyName" Width="200" Height="30" Margin="40 0 0 0" FontSize="18" VerticalContentAlignment="Center" VerticalAlignment="Top" MaxLength="50" CharacterCasing="Upper"></TextBox>
+                    <TextBox Name="txtCurrencyName" Width="200" Height="30" Margin="180 0 0 0" FontSize="18" VerticalContentAlignment="Center" VerticalAlignment="Top" MaxLength="50" CharacterCasing="Upper"></TextBox>
+                    <TextBox Name="txtExchangeRate" Width="200" Height="30" Margin="40 0 0 0" PreviewTextInput="NumberValidationTextBox" FontSize="18" VerticalContentAlignment="Center" VerticalAlignment="Top"></TextBox>
                 </StackPanel>
                 <StackPanel Grid.Row="2" Height="60" Width="1000" Orientation="Horizontal">
                     <Button Name="btnSave" Height="40" Width="150" Content="Save" Click="BtnSave_Click" Margin="350 0 20 0" Foreground="White" FontSize="20" Style="{StaticResource ButtonRound}">
@@ -261,7 +261,8 @@
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
 
-                            <DataGridTextColumn x:Name="Amount" Header="Amount" Width="100" CanUserResize="False" CanUserReorder="False" Binding="{Binding Path=Amount}" IsReadOnly="True"/>
+                            <DataGridTextColumn x:Name="ExchangeRate" Header="Exchange Rate" Width="100" CanUserResize="False" CanUserReorder="False" Binding="{Binding Path=ExchangeRate}" IsReadOnly="True"/>
+                            <DataGridTextColumn x:Name="CurrencyCode" Header="Code" Width="40" MinWidth="20" CanUserResize="False" CanUserReorder="False" Binding="{Binding Path=CurrencyCode}" IsReadOnly="True"/>
                             <DataGridTextColumn x:Name="CurrencyName" Header="Currency Name" Width="*" MinWidth="20" CanUserResize="False" CanUserReorder="False" Binding="{Binding Path=CurrencyName}" IsReadOnly="True"/>
                         </DataGrid.Columns>
                     </DataGrid>

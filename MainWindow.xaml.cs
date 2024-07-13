@@ -40,6 +40,7 @@ namespace currency_converter_wpf_dotnet
             InitializeComponent();
             string connectionString = ConfigurationManager.ConnectionStrings["currency_converter_wpf_dotnet.Properties.Settings.CurrencyConverterDbConnectionString"].ConnectionString;
             dbConnection = new SqlConnection(connectionString);
+            ClearMaster();
             BindCurrency();
         }
 
@@ -201,10 +202,10 @@ namespace currency_converter_wpf_dotnet
         {
             try
             {
-                if (txtAmount.Text == null || txtAmount.Text.Trim() == "")
+                if (txtExchangeRate.Text == null || txtExchangeRate.Text.Trim() == "")
                 {
                     MessageBox.Show("Please enter amount", "Information", MessageBoxButton.OK, MessageBoxImage.Information);
-                    txtAmount.Focus();
+                    txtExchangeRate.Focus();
                     return;
                 }
                 else if (txtCurrencyName.Text == null || txtCurrencyName.Text.Trim() == "")
@@ -216,6 +217,11 @@ namespace currency_converter_wpf_dotnet
                 else
                 {   //Edit time and set that record Id in CurrencyId variable.
                     //Code to Update. If CurrencyId greater than zero than it is go for update.
+                    if (!Decimal.TryParse(txtExchangeRate.Text, out decimal amount))
+                    {
+                        MessageBox.Show("Invalid amount entered", "Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return;
+                    }
                     if (CurrencyId > 0)
                     {
                         //Show the confirmation message
@@ -225,11 +231,16 @@ namespace currency_converter_wpf_dotnet
                             DataTable dt = new DataTable();
 
                             //Update Query Record update using Id
-                            sqlCommand = new SqlCommand("UPDATE Currency_Master SET Amount = @Amount, CurrencyName = @CurrencyName WHERE Id = @Id", dbConnection);
+                            sqlCommand = new SqlCommand("UPDATE Currency SET CurrencyName = @CurrencyName, " +
+                                "CurrencyCode = @CurrencyCode, IsReference = @IsReference, ExchangeRate = @ExchangeRate," +
+                                " LastRateUpdate = @LastRateUpdate WHERE CurrencyId = @CurrencyId", dbConnection);
                             sqlCommand.CommandType = CommandType.Text;
-                            sqlCommand.Parameters.AddWithValue("@Id", CurrencyId);
-                            sqlCommand.Parameters.AddWithValue("@Amount", txtAmount.Text);
                             sqlCommand.Parameters.AddWithValue("@CurrencyName", txtCurrencyName.Text);
+                            sqlCommand.Parameters.AddWithValue("@CurrencyCode", txtCurrencyName.Text.Substring(0, 3).ToUpper());
+                            sqlCommand.Parameters.AddWithValue("@IsReference", 0);
+                            sqlCommand.Parameters.AddWithValue("@ExchangeRate", amount);
+                            sqlCommand.Parameters.AddWithValue("@LastRateUpdate", DateTime.Now);
+                            sqlCommand.Parameters.AddWithValue("@CurrencyId", CurrencyId);
                             sqlCommand.ExecuteNonQuery();
                             dbConnection.Close();
 
@@ -243,12 +254,14 @@ namespace currency_converter_wpf_dotnet
                         {
                             MyConnection();
                             //Insert query to Save data in the table
-                            sqlCommand = new SqlCommand("INSERT INTO Currency(CurrencyName, CurrencyCode, IsReference, ExchangeRate, LastRateUpdate) VALUES(@CurrencyName, @CurrencyCode, @IsReference, @ExchangeRate, @LastRateUpdate)", dbConnection);
+                            sqlCommand = new SqlCommand("INSERT INTO Currency(CurrencyName, CurrencyCode, IsReference, " +
+                                "ExchangeRate, LastRateUpdate) VALUES(@CurrencyName, @CurrencyCode, @IsReference, " +
+                                "@ExchangeRate, @LastRateUpdate)", dbConnection);
                             sqlCommand.CommandType = CommandType.Text;
                             sqlCommand.Parameters.AddWithValue("@CurrencyName", txtCurrencyName.Text);
                             sqlCommand.Parameters.AddWithValue("@CurrencyCode", txtCurrencyName.Text.Substring(0, 3).ToUpper());
                             sqlCommand.Parameters.AddWithValue("@IsReference", 0);
-                            sqlCommand.Parameters.AddWithValue("@ExchangeRate", 0);
+                            sqlCommand.Parameters.AddWithValue("@ExchangeRate", amount);
                             sqlCommand.Parameters.AddWithValue("@LastRateUpdate", DateTime.Now);
                             sqlCommand.ExecuteNonQuery();
                             dbConnection.Close();
@@ -270,13 +283,13 @@ namespace currency_converter_wpf_dotnet
         {
             try
             {
-                txtAmount.Text = string.Empty;
+                txtExchangeRate.Text = string.Empty;
                 txtCurrencyName.Text = string.Empty;
                 btnSave.Content = "Save";
                 GetData();
                 CurrencyId = 0;
                 BindCurrency();
-                txtAmount.Focus();
+                txtExchangeRate.Focus();
             }
             catch (Exception ex)
             {
