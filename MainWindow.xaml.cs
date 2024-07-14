@@ -222,6 +222,7 @@ namespace currency_converter_wpf_dotnet
                         MessageBox.Show("Invalid amount entered", "Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
                         return;
                     }
+                    string currencyCode = txtCurrencyCode.Text ?? txtCurrencyName.Text.Substring(0, 3);
                     if (CurrencyId > 0)
                     {
                         //Show the confirmation message
@@ -233,10 +234,12 @@ namespace currency_converter_wpf_dotnet
                             //Update Query Record update using Id
                             sqlCommand = new SqlCommand("UPDATE Currency SET CurrencyName = @CurrencyName, " +
                                 "CurrencyCode = @CurrencyCode, IsReference = @IsReference, ExchangeRate = @ExchangeRate," +
-                                " LastRateUpdate = @LastRateUpdate WHERE CurrencyId = @CurrencyId", dbConnection);
-                            sqlCommand.CommandType = CommandType.Text;
+                                " LastRateUpdate = @LastRateUpdate WHERE CurrencyId = @CurrencyId", dbConnection)
+                            {
+                                CommandType = CommandType.Text
+                            };
                             sqlCommand.Parameters.AddWithValue("@CurrencyName", txtCurrencyName.Text);
-                            sqlCommand.Parameters.AddWithValue("@CurrencyCode", txtCurrencyName.Text.Substring(0, 3).ToUpper());
+                            sqlCommand.Parameters.AddWithValue("@CurrencyCode", currencyCode.ToUpper());
                             sqlCommand.Parameters.AddWithValue("@IsReference", 0);
                             sqlCommand.Parameters.AddWithValue("@ExchangeRate", amount);
                             sqlCommand.Parameters.AddWithValue("@LastRateUpdate", DateTime.Now);
@@ -256,10 +259,12 @@ namespace currency_converter_wpf_dotnet
                             //Insert query to Save data in the table
                             sqlCommand = new SqlCommand("INSERT INTO Currency(CurrencyName, CurrencyCode, IsReference, " +
                                 "ExchangeRate, LastRateUpdate) VALUES(@CurrencyName, @CurrencyCode, @IsReference, " +
-                                "@ExchangeRate, @LastRateUpdate)", dbConnection);
-                            sqlCommand.CommandType = CommandType.Text;
+                                "@ExchangeRate, @LastRateUpdate)", dbConnection)
+                            {
+                                CommandType = CommandType.Text
+                            };
                             sqlCommand.Parameters.AddWithValue("@CurrencyName", txtCurrencyName.Text);
-                            sqlCommand.Parameters.AddWithValue("@CurrencyCode", txtCurrencyName.Text.Substring(0, 3).ToUpper());
+                            sqlCommand.Parameters.AddWithValue("@CurrencyCode", currencyCode.ToUpper());
                             sqlCommand.Parameters.AddWithValue("@IsReference", 0);
                             sqlCommand.Parameters.AddWithValue("@ExchangeRate", amount);
                             sqlCommand.Parameters.AddWithValue("@LastRateUpdate", DateTime.Now);
@@ -342,15 +347,85 @@ namespace currency_converter_wpf_dotnet
             dbConnection.Open();
         }
 
-
-        private void btnCancel_Click(object sender, RoutedEventArgs e)
+        private void BtnCancel_Click(object sender, RoutedEventArgs e)
         {
-            //Clear the controls
+            try
+            {
+                ClearMaster();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
-        private void dgvCurrency_SelectedCellsChanged(object sender, SelectedCellsChangedEventArgs e)
+        private void DgvCurrency_SelectedCellsChanged(object sender, SelectedCellsChangedEventArgs e)
         {
-            //Get the selected row
+            try
+            {
+                //Create object for DataGrid
+                DataGrid grd = (DataGrid)sender;
+
+                //Create an object for DataRowView
+                DataRowView row_selected = grd.CurrentItem as DataRowView;
+
+                //If row_selected is not null
+                if (row_selected != null)
+                {
+                    //dgvCurrency items count greater than zero
+                    if (dgvCurrency.Items.Count > 0)
+                    {
+                        if (grd.SelectedCells.Count > 0)
+                        {
+                            //Get selected row id column value and set it to the CurrencyId variable
+                            CurrencyId = Int32.Parse(row_selected["CurrencyId"].ToString());
+
+                            //DisplayIndex is equal to zero in the Edited cell
+                            if (grd.SelectedCells[0].Column.DisplayIndex == 0)
+                            {
+                                //Get selected row amount column value and set to amount textbox
+                                txtExchangeRate.Text = row_selected["ExchangeRate"].ToString();
+
+                                txtCurrencyCode.Text = row_selected["CurrencyCode"].ToString();
+
+                                //Get selected row CurrencyName column value and set it to CurrencyName textbox
+                                txtCurrencyName.Text = row_selected["CurrencyName"].ToString();
+                                btnSave.Content = "Update";     //Change save button text Save to Update
+                            }
+
+                            //DisplayIndex is equal to one in the deleted cell
+                            if (grd.SelectedCells[0].Column.DisplayIndex == 1)
+                            {
+                                //Show confirmation dialog box
+                                if (MessageBox.Show("Are you sure you want to delete ?", "Information", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+                                {
+                                    MyConnection();
+                                    DataTable dt = new DataTable();
+
+                                    //Execute delete query to delete record from table using Id
+                                    sqlCommand = new SqlCommand("DELETE FROM Currency WHERE CurrencyId = @CurrencyId", dbConnection)
+                                    {
+                                        CommandType = CommandType.Text
+                                    };
+
+                                    //CurrencyId set in @Id parameter and send it in delete statement
+                                    sqlCommand.Parameters.AddWithValue("@CurrencyId", CurrencyId);
+                                    sqlCommand.ExecuteNonQuery();
+                                    dbConnection.Close();
+
+                                    MessageBox.Show("Data deleted successfully", "Information", MessageBoxButton.OK, MessageBoxImage.Information);
+                                    ClearMaster();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
+
     }
 }
