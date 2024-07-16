@@ -1,9 +1,12 @@
-﻿using System;
+﻿using currency_converter_wpf_dotnet.Models;
+using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.Configuration;
 using System.Data;
 using System.Data.SqlClient;
 using System.Linq;
+using System.Net.Http;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -27,6 +30,9 @@ namespace currency_converter_wpf_dotnet
         //Declare CurrencyId with int data type and assign value as 0.
         private int CurrencyId = 0;
 
+        // Rate update url
+        private static readonly string RateUpdateUrl = "https://openexchangerates.org/api/latest.json?app_id=239805ae6d264230a69abfcd8e94ac65";
+
         //Create object for SqlConnection
         SqlConnection dbConnection = new SqlConnection();
 
@@ -41,8 +47,100 @@ namespace currency_converter_wpf_dotnet
             string connectionString = ConfigurationManager.ConnectionStrings["currency_converter_wpf_dotnet.Properties.Settings.CurrencyConverterDbConnectionString"].ConnectionString;
             dbConnection = new SqlConnection(connectionString);
             ClearMaster();
+            InitializeAsync();
+        }
+
+        private async void InitializeAsync()
+        {
+            await UpdateRates();
             BindCurrency();
         }
+
+        private async Task UpdateRates()
+        {
+            var myRateUpdate = await GetRatesAsync();
+            if (myRateUpdate != null)
+            {
+                foreach (var rate in myRateUpdate.Rates)
+                {
+                    try
+                    {
+                        MyConnection();
+                        DataTable dt = new DataTable();
+                        sqlCommand = new SqlCommand("SELECT * FROM Currency WHERE CurrencyCode = @CurrencyCode", dbConnection)
+                        {
+                            CommandType = CommandType.Text
+                        };
+                        sqlCommand.Parameters.AddWithValue("@CurrencyCode", rate.Key);
+                        dataAdapter = new SqlDataAdapter(sqlCommand);
+                        dataAdapter.Fill(dt);
+                        dbConnection.Close();
+                        DateTime origin = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
+                        DateTime lastRateUpdate = origin.AddSeconds(myRateUpdate.Timestamp);
+                        if (dt.Rows.Count > 0)
+                        {
+                            MyConnection();
+                            sqlCommand = new SqlCommand("UPDATE Currency SET ExchangeRate = @ExchangeRate, LastRateUpdate = @LastRateUpdate WHERE CurrencyCode = @CurrencyCode", dbConnection)
+                            {
+                                CommandType = CommandType.Text
+                            };
+                            sqlCommand.Parameters.AddWithValue("@ExchangeRate", rate.Value);
+                            sqlCommand.Parameters.AddWithValue("@LastRateUpdate", lastRateUpdate);
+                            sqlCommand.Parameters.AddWithValue("@CurrencyCode", rate.Key);
+                            sqlCommand.ExecuteNonQuery();
+                            dbConnection.Close();
+                        }
+                        else
+                        {
+                            MyConnection();
+                            sqlCommand = new SqlCommand("INSERT INTO Currency(CurrencyName, CurrencyCode, IsReference, ExchangeRate, LastRateUpdate) VALUES(@CurrencyName, @CurrencyCode, @IsReference, @ExchangeRate, @LastRateUpdate)", dbConnection)
+                            {
+                                CommandType = CommandType.Text
+                            };
+                            sqlCommand.Parameters.AddWithValue("@CurrencyName", rate.Key);
+                            sqlCommand.Parameters.AddWithValue("@CurrencyCode", rate.Key);
+                            sqlCommand.Parameters.AddWithValue("@IsReference", 0);
+                            sqlCommand.Parameters.AddWithValue("@ExchangeRate", rate.Value);
+                            sqlCommand.Parameters.AddWithValue("@LastRateUpdate", lastRateUpdate);
+                            sqlCommand.ExecuteNonQuery();
+                            dbConnection.Close();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show(ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                }
+            }
+        }
+
+        public static async Task<RateUpdateDto> GetRatesAsync()
+        {
+            var myRateUpdate = new RateUpdateDto();
+            try
+            {
+                using (var client = new HttpClient())
+                {
+                    client.Timeout = TimeSpan.FromSeconds(120);
+                    HttpResponseMessage response = await client.GetAsync(RateUpdateUrl, HttpCompletionOption.ResponseHeadersRead);
+                    if (response.StatusCode == System.Net.HttpStatusCode.OK)
+                    {
+                        var content = await response.Content.ReadAsStringAsync();
+                        myRateUpdate = JsonConvert.DeserializeObject<RateUpdateDto>(content);
+                    }
+                }
+            }
+            catch (TaskCanceledException ex)
+            {
+                MessageBox.Show("The request timed out.", "Timeout", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            return myRateUpdate;
+        }
+
 
         private void AddConversion(double convertedValue)
         {
@@ -91,26 +189,29 @@ namespace currency_converter_wpf_dotnet
                 // Bind the currency to the label
                 DataTable dtcurrency = new DataTable();
                 dtcurrency.Columns.Add("CurrencyCode");
-                dtcurrency.Columns.Add("CurrencyId");
+                dtcurrency.Columns.Add("ExchangeRate");
 
                 dtcurrency.Rows.Add("Select Currency", "0");
 
                 dataAdapter.Fill(dtcurrency);
-                dbConnection.Close();
 
                 cmbFromCurrency.ItemsSource = dtcurrency.DefaultView;
                 cmbFromCurrency.DisplayMemberPath = "CurrencyCode";
-                cmbFromCurrency.SelectedValuePath = "CurrencyId";
+                cmbFromCurrency.SelectedValuePath = "ExchangeRate";
                 cmbFromCurrency.SelectedIndex = 0;
 
                 cmbToCurrency.ItemsSource = dtcurrency.DefaultView;
                 cmbToCurrency.DisplayMemberPath = "CurrencyCode";
-                cmbToCurrency.SelectedValuePath = "CurrencyId";
+                cmbToCurrency.SelectedValuePath = "ExchangeRate";
                 cmbToCurrency.SelectedIndex = 0;
             }
             catch (Exception ex)
             {
                 MessageBox.Show(ex.Message);
+            }
+            finally
+            {
+                dbConnection.Close();
             }
         }
         private void NumberValidationTextBox(object sender, TextCompositionEventArgs e) //Allow Only Integer in Text Box
@@ -190,7 +291,7 @@ namespace currency_converter_wpf_dotnet
             {
                 //Calculation for currency converter is From Currency value multiply(*) 
                 //With the amount textbox value and then that total divided(/) with To Currency value
-                ConvertedValue = (double.Parse(cmbToCurrency.SelectedValue.ToString()) * double.Parse(txtCurrency.Text)) / double.Parse(cmbFromCurrency.SelectedValue.ToString());
+                ConvertedValue = (double.Parse(cmbFromCurrency.SelectedValue.ToString()) * double.Parse(txtCurrency.Text)) / double.Parse(cmbToCurrency.SelectedValue.ToString());
 
                 //Show the label converted currency and converted currency name.
                 lblCurrency.Content = cmbToCurrency.Text + " " + ConvertedValue.ToString("N2");
@@ -245,7 +346,6 @@ namespace currency_converter_wpf_dotnet
                             sqlCommand.Parameters.AddWithValue("@LastRateUpdate", DateTime.Now);
                             sqlCommand.Parameters.AddWithValue("@CurrencyId", CurrencyId);
                             sqlCommand.ExecuteNonQuery();
-                            dbConnection.Close();
 
                             MessageBox.Show("Data updated successfully", "Information", MessageBoxButton.OK, MessageBoxImage.Information);
                         }
@@ -269,7 +369,6 @@ namespace currency_converter_wpf_dotnet
                             sqlCommand.Parameters.AddWithValue("@ExchangeRate", amount);
                             sqlCommand.Parameters.AddWithValue("@LastRateUpdate", DateTime.Now);
                             sqlCommand.ExecuteNonQuery();
-                            dbConnection.Close();
 
                             MessageBox.Show("Data saved successfully", "Information", MessageBoxButton.OK, MessageBoxImage.Information);
                         }
@@ -280,6 +379,10 @@ namespace currency_converter_wpf_dotnet
             catch (Exception ex)
             {
                 MessageBox.Show(ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                dbConnection.Close();
             }
         }
 
@@ -306,35 +409,45 @@ namespace currency_converter_wpf_dotnet
         public void GetData()
         {
 
-            //Method is used for connect with database and open database connection
-            MyConnection();
-
-            //Create Datatable object
-            DataTable dt = new DataTable();
-
-            //Write SQL query to get the data from database table. Query written in double quotes and after comma provide connection.
-            sqlCommand = new SqlCommand("SELECT * FROM Currency", dbConnection)
+            try
             {
-                //CommandType define which type of command will execute like Text, StoredProcedure, TableDirect.
-                CommandType = CommandType.Text
-            };
+                //Method is used for connect with database and open database connection
+                MyConnection();
 
-            //It is accept a parameter that contains the command text of the object's SelectCommand property.
-            dataAdapter = new SqlDataAdapter(sqlCommand);
+                //Create Datatable object
+                DataTable dt = new DataTable();
 
-            //The DataAdapter serves as a bridge between a DataSet and a data source for retrieving and saving data. 
-            //The fill operation then adds the rows to destination DataTable objects in the DataSet
-            dataAdapter.Fill(dt);
+                //Write SQL query to get the data from database table. Query written in double quotes and after comma provide connection.
+                sqlCommand = new SqlCommand("SELECT * FROM Currency", dbConnection)
+                {
+                    //CommandType define which type of command will execute like Text, StoredProcedure, TableDirect.
+                    CommandType = CommandType.Text
+                };
 
-            //dt is not null and rows count greater than 0
-            if (dt != null && dt.Rows.Count > 0)
-                //Assign DataTable data to dgvCurrency using item source property.
-                dgvCurrency.ItemsSource = dt.DefaultView;
-            else
-                dgvCurrency.ItemsSource = null;
+                //It is accept a parameter that contains the command text of the object's SelectCommand property.
+                dataAdapter = new SqlDataAdapter(sqlCommand);
 
-            //Database connection close
-            dbConnection.Close();
+                //The DataAdapter serves as a bridge between a DataSet and a data source for retrieving and saving data. 
+                //The fill operation then adds the rows to destination DataTable objects in the DataSet
+                dataAdapter.Fill(dt);
+
+                //dt is not null and rows count greater than 0
+                if (dt != null && dt.Rows.Count > 0)
+                    //Assign DataTable data to dgvCurrency using item source property.
+                    dgvCurrency.ItemsSource = dt.DefaultView;
+                else
+                    dgvCurrency.ItemsSource = null;
+
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                //Database connection close
+                dbConnection.Close();
+            }
         }
 
         public void MyConnection()
@@ -399,22 +512,32 @@ namespace currency_converter_wpf_dotnet
                                 //Show confirmation dialog box
                                 if (MessageBox.Show("Are you sure you want to delete ?", "Information", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
                                 {
-                                    MyConnection();
-                                    DataTable dt = new DataTable();
-
-                                    //Execute delete query to delete record from table using Id
-                                    sqlCommand = new SqlCommand("DELETE FROM Currency WHERE CurrencyId = @CurrencyId", dbConnection)
+                                    try
                                     {
-                                        CommandType = CommandType.Text
-                                    };
+                                        MyConnection();
+                                        DataTable dt = new DataTable();
 
-                                    //CurrencyId set in @Id parameter and send it in delete statement
-                                    sqlCommand.Parameters.AddWithValue("@CurrencyId", CurrencyId);
-                                    sqlCommand.ExecuteNonQuery();
-                                    dbConnection.Close();
+                                        //Execute delete query to delete record from table using Id
+                                        sqlCommand = new SqlCommand("DELETE FROM Currency WHERE CurrencyId = @CurrencyId", dbConnection)
+                                        {
+                                            CommandType = CommandType.Text
+                                        };
 
-                                    MessageBox.Show("Data deleted successfully", "Information", MessageBoxButton.OK, MessageBoxImage.Information);
-                                    ClearMaster();
+                                        //CurrencyId set in @Id parameter and send it in delete statement
+                                        sqlCommand.Parameters.AddWithValue("@CurrencyId", CurrencyId);
+                                        sqlCommand.ExecuteNonQuery();
+
+                                        MessageBox.Show("Data deleted successfully", "Information", MessageBoxButton.OK, MessageBoxImage.Information);
+                                        ClearMaster();
+                                    } //End of try block
+                                    catch (Exception ex)
+                                    {
+                                        MessageBox.Show(ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                                    }
+                                    finally
+                                    {
+                                        dbConnection.Close();
+                                    }
                                 }
                             }
                         }
