@@ -30,9 +30,6 @@ namespace currency_converter_wpf_dotnet
         //Declare CurrencyId with int data type and assign value as 0.
         private int CurrencyId = 0;
 
-        // Rate update url
-        private static readonly string RateUpdateUrl = "https://openexchangerates.org/api/latest.json?app_id=239805ae6d264230a69abfcd8e94ac65";
-
         //Create object for SqlConnection
         SqlConnection dbConnection = new SqlConnection();
 
@@ -46,101 +43,127 @@ namespace currency_converter_wpf_dotnet
             InitializeComponent();
             string connectionString = ConfigurationManager.ConnectionStrings["currency_converter_wpf_dotnet.Properties.Settings.CurrencyConverterDbConnectionString"].ConnectionString;
             dbConnection = new SqlConnection(connectionString);
+            SeedCurrencies(); // Seed initial currency data
             ClearMaster();
             InitializeAsync();
         }
 
-        private async void InitializeAsync()
+        private void InitializeAsync()
         {
-            await UpdateRates();
             BindCurrency();
         }
 
-        private async Task UpdateRates()
+        /// <summary>
+        /// Seeds the Currency table with initial exchange rates
+        /// This method runs on application startup and only inserts currencies that don't exist
+        /// </summary>
+        private void SeedCurrencies()
         {
-            var myRateUpdate = await GetRatesAsync();
-            if (myRateUpdate != null)
+            try
             {
-                foreach (var rate in myRateUpdate.Rates)
+                MyConnection();
+
+                // Seed data with common currencies (rates relative to USD)
+                var currencies = new List<(string Name, string Code, double Rate, bool IsReference)>
                 {
-                    try
+                    ("US Dollar", "USD", 1.0, true),
+                    ("Euro", "EUR", 0.92, false),
+                    ("British Pound", "GBP", 0.79, false),
+                    ("Japanese Yen", "JPY", 149.50, false),
+                    ("Canadian Dollar", "CAD", 1.36, false),
+                    ("Australian Dollar", "AUD", 1.52, false),
+                    ("Swiss Franc", "CHF", 0.88, false),
+                    ("Chinese Yuan", "CNY", 7.24, false),
+                    ("Indian Rupee", "INR", 83.12, false),
+                    ("Brazilian Real", "BRL", 4.97, false)
+                };
+
+                foreach (var currency in currencies)
+                {
+                    // Check if currency already exists
+                    sqlCommand = new SqlCommand("IF NOT EXISTS (SELECT 1 FROM Currency WHERE CurrencyCode = @CurrencyCode) " +
+                        "INSERT INTO Currency (CurrencyName, CurrencyCode, IsReference, ExchangeRate, LastRateUpdate) " +
+                        "VALUES (@CurrencyName, @CurrencyCode, @IsReference, @ExchangeRate, @LastRateUpdate)", dbConnection)
                     {
-                        MyConnection();
-                        DataTable dt = new DataTable();
-                        sqlCommand = new SqlCommand("SELECT * FROM Currency WHERE CurrencyCode = @CurrencyCode", dbConnection)
-                        {
-                            CommandType = CommandType.Text
-                        };
-                        sqlCommand.Parameters.AddWithValue("@CurrencyCode", rate.Key);
-                        dataAdapter = new SqlDataAdapter(sqlCommand);
-                        dataAdapter.Fill(dt);
-                        dbConnection.Close();
-                        DateTime origin = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
-                        DateTime lastRateUpdate = origin.AddSeconds(myRateUpdate.Timestamp);
-                        if (dt.Rows.Count > 0)
-                        {
-                            MyConnection();
-                            sqlCommand = new SqlCommand("UPDATE Currency SET ExchangeRate = @ExchangeRate, LastRateUpdate = @LastRateUpdate WHERE CurrencyCode = @CurrencyCode", dbConnection)
-                            {
-                                CommandType = CommandType.Text
-                            };
-                            sqlCommand.Parameters.AddWithValue("@ExchangeRate", rate.Value);
-                            sqlCommand.Parameters.AddWithValue("@LastRateUpdate", lastRateUpdate);
-                            sqlCommand.Parameters.AddWithValue("@CurrencyCode", rate.Key);
-                            sqlCommand.ExecuteNonQuery();
-                            dbConnection.Close();
-                        }
-                        else
-                        {
-                            MyConnection();
-                            sqlCommand = new SqlCommand("INSERT INTO Currency(CurrencyName, CurrencyCode, IsReference, ExchangeRate, LastRateUpdate) VALUES(@CurrencyName, @CurrencyCode, @IsReference, @ExchangeRate, @LastRateUpdate)", dbConnection)
-                            {
-                                CommandType = CommandType.Text
-                            };
-                            sqlCommand.Parameters.AddWithValue("@CurrencyName", rate.Key);
-                            sqlCommand.Parameters.AddWithValue("@CurrencyCode", rate.Key);
-                            sqlCommand.Parameters.AddWithValue("@IsReference", 0);
-                            sqlCommand.Parameters.AddWithValue("@ExchangeRate", rate.Value);
-                            sqlCommand.Parameters.AddWithValue("@LastRateUpdate", lastRateUpdate);
-                            sqlCommand.ExecuteNonQuery();
-                            dbConnection.Close();
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show(ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                    }
+                        CommandType = CommandType.Text
+                    };
+                    sqlCommand.Parameters.Clear(); // Clear parameters for reuse
+                    sqlCommand.Parameters.AddWithValue("@CurrencyName", currency.Name);
+                    sqlCommand.Parameters.AddWithValue("@CurrencyCode", currency.Code);
+                    sqlCommand.Parameters.AddWithValue("@IsReference", currency.IsReference ? 1 : 0);
+                    sqlCommand.Parameters.AddWithValue("@ExchangeRate", currency.Rate);
+                    sqlCommand.Parameters.AddWithValue("@LastRateUpdate", DateTime.Now);
+                    sqlCommand.ExecuteNonQuery();
+                }
+            }
+            catch (SqlException sqlEx)
+            {
+                MessageBox.Show($"Database error while seeding currencies:\n{sqlEx.Message}\n\nPlease ensure SQL Server is running and the connection string is correct.", 
+                    "Database Connection Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error seeding currencies:\n{ex.Message}", "Seeding Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                if (dbConnection != null && dbConnection.State == ConnectionState.Open)
+                {
+                    dbConnection.Close();
                 }
             }
         }
 
-        public static async Task<RateUpdateDto> GetRatesAsync()
+        /// <summary>
+        /// Retrieves all currency rates from the database
+        /// </summary>
+        /// <returns>Dictionary with currency code as key and exchange rate as value</returns>
+        private Dictionary<string, double> GetRatesFromDatabase()
         {
-            var myRateUpdate = new RateUpdateDto();
+            var rates = new Dictionary<string, double>();
             try
             {
-                using (var client = new HttpClient())
+                MyConnection();
+                sqlCommand = new SqlCommand("SELECT CurrencyCode, ExchangeRate FROM Currency", dbConnection)
                 {
-                    client.Timeout = TimeSpan.FromSeconds(120);
-                    HttpResponseMessage response = await client.GetAsync(RateUpdateUrl, HttpCompletionOption.ResponseHeadersRead);
-                    if (response.StatusCode == System.Net.HttpStatusCode.OK)
+                    CommandType = CommandType.Text
+                };
+                using (var reader = sqlCommand.ExecuteReader())
+                {
+                    while (reader.Read())
                     {
-                        var content = await response.Content.ReadAsStringAsync();
-                        myRateUpdate = JsonConvert.DeserializeObject<RateUpdateDto>(content);
+                        var code = reader["CurrencyCode"].ToString();
+                        var rate = System.Convert.ToDouble(reader["ExchangeRate"]);
+                        rates[code] = rate;
                     }
                 }
-            }
-            catch (TaskCanceledException ex)
-            {
-                MessageBox.Show("The request timed out.", "Timeout", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             catch (Exception ex)
             {
                 MessageBox.Show(ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
-            return myRateUpdate;
+            finally
+            {
+                dbConnection.Close();
+            }
+            return rates;
         }
 
+        /// <summary>
+        /// Gets rates from database in DTO format for compatibility
+        /// </summary>
+        private RateUpdateDto GetRatesFromDbAsDto()
+        {
+            var dto = new RateUpdateDto
+            {
+                Disclaimer = "Rates from local database",
+                License = "Internal use",
+                Timestamp = (int)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalSeconds,
+                Base = "USD",
+                Rates = GetRatesFromDatabase()
+            };
+            return dto;
+        }
 
         private void AddConversion(double convertedValue)
         {
@@ -549,6 +572,5 @@ namespace currency_converter_wpf_dotnet
                 MessageBox.Show(ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
-
     }
 }
