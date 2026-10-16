@@ -1,5 +1,14 @@
 # Currency Converter WPF .NET Project
 
+> **Repository status:** historical learning project retained as a desktop-development reference. It is not an actively supported currency-rate service or production financial application.
+
+## Documentation
+
+- [Current-state overview](docs/README.md)
+- [Project charter](docs/project-charter.md)
+- [Architecture and local setup](docs/architecture.md)
+- [Delivery and quality handoff](docs/delivery-and-quality.md)
+
 This repository contains a comprehensive WPF (Windows Presentation Foundation) application for converting currencies, built with .NET. The project involves setting up a database, designing a user interface, implementing functionality for inserting and editing data, and ensuring robust input validation and logic completion.
 
 ## Project Overview
@@ -35,3 +44,5 @@ To get started with this project, clone the repository and open it in your prefe
 ```bash
 git clone https://github.com/gezielcarvalho/currency-converter-wpf-dotnet.git
 ```
+
+The repository name is retained for historical continuity; it is intentionally not being renamed while the repository is under archive review.
